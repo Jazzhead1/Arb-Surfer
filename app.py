@@ -4,65 +4,53 @@ import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
 # Auto-refresh every 30 seconds
-st_autorefresh(interval=30_000, limit=None, key="arbsurferrefresh")
+st_autorefresh(interval=30 * 1000, key="data_refresh")
 
-# Page config
+# Streamlit page settings
 st.set_page_config(page_title="ArbSurfer", layout="wide")
-st.markdown("<h1 style='color:#00adb5;'>🌊 ArbSurfer — Real-Time Crypto Arbitrage Scanner</h1>", unsafe_allow_html=True)
+st.title("🌊 ArbSurfer — Crypto Arbitrage Scanner")
 
-# Exchange setup
+# Load exchange objects
 kraken = ccxt.kraken()
 kucoin = ccxt.kucoin()
 
-# Load markets safely
-try:
-    kraken.load_markets()
-except Exception as e:
-    st.error(f"Failed to load Kraken markets: {e}")
+# Load markets
+kraken.load_markets()
+kucoin.load_markets()
 
-# Use correct BTC pair if available
-if 'XBT/USDT' in kraken.markets:
-    kraken_btc_pair = 'XBT/USDT'
-else:
-    kraken_btc_pair = None
-    st.warning("Kraken BTC pair (XBT/USDT) not available. Skipping BTC for Kraken.")
-
-# Symbol map
+# Define symbols
 symbol_map = {
-    "BTC": {"Kraken": kraken_btc_pair, "KuCoin": "BTC/USDT"} if kraken_btc_pair else {"KuCoin": "BTC/USDT"},
+    "BTC": {"Kraken": "BTC/USD", "KuCoin": "BTC/USDT"},
     "ETH": {"Kraken": "ETH/USDT", "KuCoin": "ETH/USDT"},
     "SOL": {"Kraken": "SOL/USDT", "KuCoin": "SOL/USDT"},
     "XRP": {"Kraken": "XRP/USD", "KuCoin": "XRP/USDT"}
 }
 
-# Price fetcher
+# Fetch price safely
 def fetch_price(exchange_obj, symbol):
     try:
         ticker = exchange_obj.fetch_ticker(symbol)
         return ticker['last']
     except Exception as e:
-        st.error(f"❌ Error fetching {symbol} from {exchange_obj.id}: {e}")
+        st.error(f"{exchange_obj.id} error for {symbol}: {e}")
         return None
 
-# Display logic
+# Main display loop
 for asset, exchange_symbols in symbol_map.items():
-    st.markdown(f"### 📈 {asset}")
+    st.subheader(f"📈 {asset} Arbitrage Opportunities")
     prices = {}
-    for exchange_name, symbol in exchange_symbols.items():
-        exchange_obj = kraken if exchange_name == "Kraken" else kucoin
-        price = fetch_price(exchange_obj, symbol)
+    for name, obj in {"Kraken": kraken, "KuCoin": kucoin}.items():
+        symbol = exchange_symbols.get(name)
+        price = fetch_price(obj, symbol)
         if price:
-            prices[exchange_name] = price
-
+            prices[name] = price
     if len(prices) >= 2:
-        df = pd.DataFrame(prices.items(), columns=["Exchange", "Price"]).sort_values(by="Price")
+        df = pd.DataFrame(prices.items(), columns=["Exchange", "Price"]).sort_values("Price")
         st.dataframe(df, use_container_width=True)
         low = df.iloc[0]
         high = df.iloc[-1]
         spread = high["Price"] - low["Price"]
-        profit_percent = (spread / low["Price"]) * 100
-        st.success(f"💸 Buy on {low['Exchange']} at {low['Price']:.4f}, sell on {high['Exchange']} at {high['Price']:.4f} → Profit: {profit_percent:.2f}%")
+        profit_pct = (spread / low["Price"]) * 100
+        st.success(f"Buy on {low['Exchange']} at {low['Price']:.2f} → Sell on {high['Exchange']} at {high['Price']:.2f} → Profit: {profit_pct:.2f}%")
     else:
-        st.info(f"Not enough data for {asset} yet.")
-
-st.caption("🔄 Auto-refreshes every 30 seconds.")
+        st.warning(f"Not enough data for {asset}")
