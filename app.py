@@ -3,22 +3,18 @@ import ccxt
 import pandas as pd
 from streamlit_autorefresh import st_autorefresh
 
-# Auto-refresh every 30 seconds
+# Optional auto-refresh every 30 sec
 st_autorefresh(interval=30 * 1000, key="data_refresh")
 
-# Streamlit page settings
 st.set_page_config(page_title="ArbSurfer", layout="wide")
 st.title("🌊 ArbSurfer — Crypto Arbitrage Scanner")
 
-# Load exchange objects
 kraken = ccxt.kraken()
 kucoin = ccxt.kucoin()
 
-# Load markets
 kraken.load_markets()
 kucoin.load_markets()
 
-# Define symbols
 symbol_map = {
     "BTC": {"Kraken": "BTC/USD", "KuCoin": "BTC/USDT"},
     "ETH": {"Kraken": "ETH/USDT", "KuCoin": "ETH/USDT"},
@@ -26,7 +22,6 @@ symbol_map = {
     "XRP": {"Kraken": "XRP/USD", "KuCoin": "XRP/USDT"}
 }
 
-# Fetch price safely
 def fetch_price(exchange_obj, symbol):
     try:
         ticker = exchange_obj.fetch_ticker(symbol)
@@ -35,9 +30,8 @@ def fetch_price(exchange_obj, symbol):
         st.error(f"{exchange_obj.id} error for {symbol}: {e}")
         return None
 
-# Main display loop
 for asset, exchange_symbols in symbol_map.items():
-    st.subheader(f"📈 {asset} Arbitrage Opportunities")
+    st.subheader(f"📈 {asset} Arbitrage")
     prices = {}
     for name, obj in {"Kraken": kraken, "KuCoin": kucoin}.items():
         symbol = exchange_symbols.get(name)
@@ -46,11 +40,11 @@ for asset, exchange_symbols in symbol_map.items():
             prices[name] = price
     if len(prices) >= 2:
         df = pd.DataFrame(prices.items(), columns=["Exchange", "Price"]).sort_values("Price")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df)
         low = df.iloc[0]
         high = df.iloc[-1]
         spread = high["Price"] - low["Price"]
         profit_pct = (spread / low["Price"]) * 100
-        st.success(f"Buy on {low['Exchange']} at {low['Price']:.2f} → Sell on {high['Exchange']} at {high['Price']:.2f} → Profit: {profit_pct:.2f}%")
+        st.success(f"Buy on {low['Exchange']} → Sell on {high['Exchange']} | 💰 Profit: {profit_pct:.2f}%")
     else:
         st.warning(f"Not enough data for {asset}")
