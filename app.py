@@ -1,70 +1,59 @@
 import streamlit as st
-import ccxt
-import pandas as pd
-from streamlit_autorefresh import st_autorefresh
+import requests
+import time
 
-# 🔧 Must be the very first Streamlit command!
 st.set_page_config(page_title="ArbSurfer", layout="wide")
+st.title("🌊 ArbSurfer: Solana Arbitrage Monitor")
 
-# 🔄 Auto-refresh every 30 seconds
-st_autorefresh(interval=30_000, limit=None, key="arbsurferrefresh")
-
-# 🎨 App Header
-st.markdown("<h1 style='color:#00adb5;'>🌊 ArbSurfer — Real-Time Crypto Arbitrage Scanner</h1>", unsafe_allow_html=True)
-
-# 🔌 Exchange setup
-kraken = ccxt.kraken()
-kucoin = ccxt.kucoin()
-
-# 🔃 Load markets
-try:
-    kraken.load_markets()
-except Exception as e:
-    st.error(f"⚠️ Failed to load Kraken markets: {e}")
-
-# 🧠 Handle Kraken BTC symbol differences
-kraken_btc_pair = 'XBT/USDT' if 'XBT/USDT' in kraken.markets else None
-if not kraken_btc_pair:
-    st.warning("Kraken BTC pair (XBT/USDT) not available. Skipping BTC for Kraken.")
-
-# 💱 Symbol map
-symbol_map = {
-    "BTC": {"Kraken": kraken_btc_pair, "KuCoin": "BTC/USDT"} if kraken_btc_pair else {"KuCoin": "BTC/USDT"},
-    "ETH": {"Kraken": "ETH/USDT", "KuCoin": "ETH/USDT"},
-    "SOL": {"Kraken": "SOL/USDT", "KuCoin": "SOL/USDT"},
-    "XRP": {"Kraken": "XRP/USD", "KuCoin": "XRP/USDT"}
-}
-
-# 🏷️ Price fetcher
-def fetch_price(exchange_obj, symbol):
+# Get prices
+def get_orca_price():
     try:
-        ticker = exchange_obj.fetch_ticker(symbol)
-        return ticker['last']
+        resp = requests.get("https://quote-api.jup.ag/v6/quote", params={
+            "inputMint": "So11111111111111111111111111111111111111112",  # SOL
+            "outputMint": "Es9vMFrzaCERFBn5gdB34dFpgdQT1D9pU8WWvWrtCPSb",  # USDT
+            "amount": 10000000,
+            "slippage": 1
+        })
+        data = resp.json()
+        return float(data["outAmount"]) / 1e6
     except Exception as e:
-        st.error(f"❌ Error fetching {symbol} from {exchange_obj.id}: {e}")
+        st.error(f"Orca error: {e}")
         return None
 
-# 🔍 Arbitrage logic and display
-for asset, exchange_symbols in symbol_map.items():
-    st.markdown(f"### 📈 {asset}")
-    prices = {}
-    for exchange_name, symbol in exchange_symbols.items():
-        exchange_obj = kraken if exchange_name == "Kraken" else kucoin
-        if symbol:
-            price = fetch_price(exchange_obj, symbol)
-            if price:
-                prices[exchange_name] = price
+def get_raydium_price():
+    try:
+        data = requests.get("https://api.raydium.io/pairs").json()
+        for pair in data:
+            if pair["name"] == "SOL/USDT":
+                return float(pair["price"])
+        return None
+    except Exception as e:
+        st.error(f"Raydium error: {e}")
+        return None
 
-    if len(prices) >= 2:
-        df = pd.DataFrame(prices.items(), columns=["Exchange", "Price"]).sort_values(by="Price")
-        st.dataframe(df, use_container_width=True)
-        low = df.iloc[0]
-        high = df.iloc[-1]
-        spread = high["Price"] - low["Price"]
-        profit_percent = (spread / low["Price"]) * 100
-        st.success(f"💸 Buy on {low['Exchange']} at {low['Price']:.4f}, sell on {high['Exchange']} at {high['Price']:.4f} → Profit: {profit_percent:.2f}%")
-    else:
-        st.info(f"Not enough data for {asset} yet.")
+# Refresh every 30 seconds
+placeholder = st.empty()
+while True:
+    with placeholder.container():
+        orca = get_orca_price()
+        raydium = get_raydium_price()
 
-# 🔁 Footer
-st.caption("🔄 Auto-refreshes every 30 seconds — built with ❤️ by ArbSurfer.")
+        if orca and raydium:
+            spread = abs(orca - raydium)
+            spread_pct = (spread / min(orca, raydium)) * 100
+
+            st.subheader("Current Prices")
+            st.metric(label="💧 Orca", value=f"${orca:.4f}")
+            st.metric(label="🧪 Raydium", value=f"${raydium:.4f}")
+            st.metric(label="📈 Spread %", value=f"{spread_pct:.2f}%")
+
+            if spread_pct >= 0.1:
+                st.success("🚨 Arbitrage opportunity detected!")
+            else:
+                st.warning("⏳ No opportunity above 0.1% right now.")
+        else:
+            st.error("⚠️ Unable to fetch one or both prices.")
+
+        st.caption("Refreshing in 30s...")
+    time.sleep(30)
+    placeholder.empty()
