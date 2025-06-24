@@ -7,12 +7,13 @@ st.title("🌊 ArbSurfer: Solana Arbitrage Monitor (SOL/USDT)")
 def get_orca_price():
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        response = requests.get("https://quote-api.jup.ag/v6/quote", params={
+        params = {
             "inputMint": "So11111111111111111111111111111111111111112",  # SOL
-            "outputMint": "Es9vMFrzaCERFBn5gdB34dFpgdQT1D9pU8WWvWrtCPSb",  # USDT
-            "amount": 10000000,  # 0.01 SOL
+            "outputMint": "Es9vMFrzaCERFBN5gdB34dFpgdQT1D9pU8WWvWrtCPSb",  # Correct USDT mint
+            "amount": "10000000",  # string amount (0.01 SOL in lamports)
             "slippage": 1
-        }, headers=headers)
+        }
+        response = requests.get("https://quote-api.jup.ag/v6/quote", params=params, headers=headers)
         response.raise_for_status()
         out_amount = float(response.json()["outAmount"])
         return out_amount / 1e6
