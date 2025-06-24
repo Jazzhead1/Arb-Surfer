@@ -5,7 +5,6 @@ import time
 st.set_page_config(page_title="ArbSurfer", layout="wide")
 st.title("🌊 ArbSurfer: Solana Arbitrage Monitor")
 
-# Get prices
 def get_orca_price():
     try:
         resp = requests.get("https://quote-api.jup.ag/v6/quote", params={
@@ -17,7 +16,6 @@ def get_orca_price():
         data = resp.json()
         return float(data["outAmount"]) / 1e6
     except Exception as e:
-        st.error(f"Orca error: {e}")
         return None
 
 def get_raydium_price():
@@ -28,32 +26,30 @@ def get_raydium_price():
                 return float(pair["price"])
         return None
     except Exception as e:
-        st.error(f"Raydium error: {e}")
         return None
 
-# Refresh every 30 seconds
-placeholder = st.empty()
-while True:
-    with placeholder.container():
-        orca = get_orca_price()
-        raydium = get_raydium_price()
+# Add a refresh button
+if st.button("🔄 Refresh"):
+    st.experimental_rerun()
 
-        if orca and raydium:
-            spread = abs(orca - raydium)
-            spread_pct = (spread / min(orca, raydium)) * 100
+orca_price = get_orca_price()
+raydium_price = get_raydium_price()
 
-            st.subheader("Current Prices")
-            st.metric(label="💧 Orca", value=f"${orca:.4f}")
-            st.metric(label="🧪 Raydium", value=f"${raydium:.4f}")
-            st.metric(label="📈 Spread %", value=f"{spread_pct:.2f}%")
+if orca_price and raydium_price:
+    spread = abs(orca_price - raydium_price)
+    spread_pct = (spread / min(orca_price, raydium_price)) * 100
 
-            if spread_pct >= 0.1:
-                st.success("🚨 Arbitrage opportunity detected!")
-            else:
-                st.warning("⏳ No opportunity above 0.1% right now.")
-        else:
-            st.error("⚠️ Unable to fetch one or both prices.")
+    st.subheader("Current Prices")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("💧 Orca", f"${orca_price:.4f}")
+    col2.metric("🧪 Raydium", f"${raydium_price:.4f}")
+    col3.metric("📈 Spread", f"{spread_pct:.2f}%")
 
-        st.caption("Refreshing in 30s...")
-    time.sleep(30)
-    placeholder.empty()
+    if spread_pct >= 0.1:
+        st.success("🚨 Arbitrage opportunity detected!")
+    else:
+        st.info("⏳ No significant arbitrage right now.")
+else:
+    st.error("⚠️ Could not fetch prices. Try again later.")
+
+st.caption("Click 'Refresh' to update prices.")
