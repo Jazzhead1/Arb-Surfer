@@ -4,23 +4,22 @@ import requests
 st.set_page_config(page_title="ArbSurfer", layout="wide")
 st.title("🌊 ArbSurfer: Solana Arbitrage Monitor (SOL/USDT)")
 
-# Orca: Get price from Jupiter aggregator
 def get_orca_price():
     try:
+        headers = {"User-Agent": "Mozilla/5.0"}
         response = requests.get("https://quote-api.jup.ag/v6/quote", params={
             "inputMint": "So11111111111111111111111111111111111111112",  # SOL
             "outputMint": "Es9vMFrzaCERFBn5gdB34dFpgdQT1D9pU8WWvWrtCPSb",  # USDT
             "amount": 10000000,  # 0.01 SOL
             "slippage": 1
-        })
+        }, headers=headers)
         response.raise_for_status()
         out_amount = float(response.json()["outAmount"])
         return out_amount / 1e6
     except Exception as e:
-        st.error(f"❌ Error fetching Orca price: {e}")
+        st.error(f"❌ Error fetching Orca price from Jupiter: {e}")
         return None
 
-# Raydium: Get price from public API
 def get_raydium_price():
     try:
         response = requests.get("https://api.raydium.io/pairs")
@@ -34,15 +33,12 @@ def get_raydium_price():
         st.error(f"❌ Error fetching Raydium price: {e}")
         return None
 
-# Manual refresh button
 if st.button("🔄 Refresh"):
     st.experimental_rerun()
 
-# Get prices
 orca_price = get_orca_price()
 raydium_price = get_raydium_price()
 
-# Show results
 if orca_price and raydium_price:
     spread = abs(orca_price - raydium_price)
     spread_pct = (spread / min(orca_price, raydium_price)) * 100
